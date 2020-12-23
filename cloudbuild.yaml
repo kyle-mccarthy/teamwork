@@ -1,0 +1,15 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'build',
+      '-t', 'gcr.io/$PROJECT_ID/teamwork',
+      '--cache-from', 'gcr.io/$PROJECT_ID/teamwork',
+      '-f', 'Dockerfile',
+      '.'
+    ]
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args: ['beta', 'run', 'deploy', 'teamwork', '--image', 'gcr.io/$PROJECT_ID/teamwork', '--region', 'us-central1', '--platform', 'managed']
+images: ['gcr.io/$PROJECT_ID/teamwork']
+timeout: 1200s
+options:
+  machineType: 'N1_HIGHCPU_8'

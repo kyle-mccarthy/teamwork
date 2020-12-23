@@ -1,0 +1,29 @@
+[package]
+name = "teamwork_api"
+version = "0.1.0"
+authors = ["Kyle McCarthy <km@kylemccarthy.io>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[workspace]
+members = [
+    "teamwork_macros",
+    "teamwork_schema",
+]
+
+[[bin]]
+name = "app"
+path = "src/main.rs"
+
+[dependencies]
+teamwork_schema = { path = "./teamwork_schema" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tide = "0.15.0"
+async-std = { version = "1.8.0", features = ["attributes"] }
+thiserror = "1.0.22"
+base64 = "0.13.0"
+surf = "2.1.0"
+teamwork_macros = { path = './teamwork_macros' }
+config = "0.10.1"
