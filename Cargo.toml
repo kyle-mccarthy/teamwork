@@ -1,6 +1,6 @@
 [package]
 name = "teamwork_api"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Kyle McCarthy <km@kylemccarthy.io>"]
 edition = "2018"
 

@@ -1,5 +1,6 @@
 FROM ekidd/rust-musl-builder:latest as planner
 
+ARG CARGO_BUILD_TARGET=x86_64-unknown-linux-musl
 
 WORKDIR /app
 RUN sudo chown -R rust:rust .
