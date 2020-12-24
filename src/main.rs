@@ -124,6 +124,10 @@ pub struct Links {
 
 impl Links {
     fn new(url: &tide::http::Url, meta: &Meta) -> Self {
+        let scheme = url.scheme();
+        let host = url
+            .host_str()
+            .expect("The URL object on an HTTP request should have a valid host");
         let route = url.path();
 
         let params = url
@@ -138,7 +142,7 @@ impl Links {
             format!("{}&", params.join("&"))
         };
 
-        let link = format!("{}?{}", &route, &params);
+        let link = format!("{}://{}{}?{}", &scheme, &host, &route, &params);
 
         let next = if meta.page < meta.total_pages {
             Some(format!("{}page={}", link, meta.page + 1))
