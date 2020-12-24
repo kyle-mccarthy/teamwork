@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-teamwork_macros::make_schema!(
-    Task,
-    r#"{
+teamwork_macros::generate_schema!([
+    (
+        Task,
+        r#"{
       "id": 1,
       "boardColumn": {
         "id": 1,
@@ -58,14 +59,25 @@ teamwork_macros::make_schema!(
       "canLogTime": true,
       "userFollowingComments": false,
       "userFollowingChanges": false,
-      "DLM": 0
+      "DLM": 0,
+      "tags": [
+        {
+          "id": 32661,
+          "name": "On Hold",
+          "color": "f4bd38",
+          "projectId": 0
+        }
+      ],
+      "parent-task": {
+        "content": "ParentTask",
+        "id": "17774182"
+      }
     }
 "#
-);
-
-teamwork_macros::make_schema!(
-    TimeEntry,
-    r#"
+    ),
+    (
+        TimeEntry,
+        r#"
 {
       "project-id": "1",
       "isbillable": "0",
@@ -103,11 +115,10 @@ teamwork_macros::make_schema!(
       "hours": "1"
     }
 "#
-);
-
-teamwork_macros::make_schema!(
-    TaskList,
-    r#"
+    ),
+    (
+        TaskList,
+        r#"
     {
       "id": "1",
       "name": "task list 1",
@@ -118,7 +129,14 @@ teamwork_macros::make_schema!(
       "updatedAfter": "2018-09-13T14:57:03Z",
       "private": false,
       "isTemplate": false,
-      "tags": [],
+      "tagged": [
+        {
+          "id": 32661,
+          "name": "On Hold",
+          "color": "f4bd38",
+          "projectId": 0
+        }
+      ],
       "milestone-id": "",
       "pinned": false,
       "complete": false,
@@ -126,4 +144,5 @@ teamwork_macros::make_schema!(
       "status": "new"
     }
   "#
-);
+    )
+]);

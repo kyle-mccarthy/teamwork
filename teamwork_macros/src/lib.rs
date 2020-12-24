@@ -4,7 +4,10 @@ use inflector::Inflector;
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::quote;
-use syn::{parse_macro_input, Ident, LitStr, Type};
+use syn::{
+    parse::{Parse, ParseStream},
+    parse_macro_input, token, Ident, LitStr, Result, Token, Type,
+};
 
 lazy_static::lazy_static! {
     static ref RENAMED: HashMap<&'static str, &'static str> = {
@@ -15,6 +18,7 @@ lazy_static::lazy_static! {
         "last_changed_on", "updated_at");
         m
     };
+
 }
 
 #[derive(Debug, Default)]
@@ -69,6 +73,26 @@ impl Builder {
                     }
                     serde_json::Value::Bool(_) => {
                         quote! { Option<bool> }
+                    }
+                    serde_json::Value::Array(arr) => {
+                        if arr.len() > 0 && arr[0].is_object() {
+                            let inner_obj = &arr[0]
+                                .as_object()
+                                .expect("is_object returned true, should unwrap to object");
+                            let obj_name = old_name.to_singular().to_pascal_case();
+
+                            if !self.structs.contains_key(&obj_name) {
+                                self.create_object_from_map(&obj_name, inner_obj);
+                            }
+
+                            let obj = self.structs.get(&obj_name).unwrap();
+
+                            let obj_ident = &obj.name_ident;
+
+                            quote! { Option<Vec<#obj_ident>> }
+                        } else {
+                            quote! { Option<serde_json::Value> }
+                        }
                     }
                     _ => {
                         quote! { Option<serde_json::Value> }
@@ -153,30 +177,122 @@ struct Object {
 }
 
 #[proc_macro]
-pub fn make_schema(input: TokenStream) -> TokenStream {
-    struct Schema {
-        name: Ident,
-        raw_schema: LitStr,
+pub fn generate_schema(input: TokenStream) -> TokenStream {
+    fn parse_litstr_to_json_object(
+        s: &LitStr,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        let span = s.span();
+        let inner = s.value();
+
+        serde_json::from_str::<serde_json::Value>(&inner)
+            .map_err(|e| syn::Error::new(span, e.to_string()))
+            .and_then(|val| {
+                val.as_object()
+                    .ok_or_else(|| {
+                        syn::Error::new(span, "expected value to deserialize to json object")
+                    })
+                    .map(|v| v.clone())
+            })
     }
 
-    impl syn::parse::Parse for Schema {
-        fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-            let name: Ident = input.parse()?;
-            let _: syn::Token![,] = input.parse()?;
-            let raw_schema: LitStr = input.parse()?;
+    #[derive(Debug)]
+    struct Schema {
+        name: Ident,
+        inner: LitStr,
+        json_obj: serde_json::Map<String, serde_json::Value>,
+    }
 
-            Ok(Schema { name, raw_schema })
+    impl Parse for Schema {
+        fn parse(input: ParseStream) -> Result<Self> {
+            let name = input.parse::<Ident>()?;
+
+            input.parse::<Token![,]>()?;
+
+            let inner = input.parse::<LitStr>()?;
+
+            let json_obj = parse_litstr_to_json_object(&inner)?;
+
+            Ok(Schema {
+                name,
+                inner,
+                json_obj,
+            })
         }
     }
 
-    let input = parse_macro_input!(input as Schema);
-    let value = input.raw_schema.value();
+    #[derive(Debug)]
+    struct Item {
+        paren_token: syn::token::Paren,
+        schema: Schema,
+    }
 
-    let input_json: serde_json::Map<String, serde_json::Value> =
-        serde_json::from_str(&value).unwrap();
+    impl Parse for Item {
+        fn parse(input: ParseStream) -> Result<Self> {
+            let content;
+
+            Ok(Item {
+                paren_token: syn::parenthesized!(content in input),
+                schema: content.parse::<Schema>()?,
+            })
+        }
+    }
+
+    #[derive(Debug)]
+    struct List {
+        bracket_token: token::Bracket,
+        items: syn::punctuated::Punctuated<Item, syn::Token![,]>,
+    }
+
+    impl List {
+        fn into_schema_list(self) -> SchemaList {
+            SchemaList {
+                items: self.items.into_iter().map(|i| i.schema).collect(),
+            }
+        }
+    }
+
+    impl Parse for List {
+        fn parse(input: ParseStream) -> Result<Self> {
+            let content;
+
+            Ok(List {
+                bracket_token: syn::bracketed!(content in input),
+                items: content.parse_terminated(Item::parse)?,
+            })
+        }
+    }
+
+    #[derive(Debug)]
+    struct SchemaList {
+        items: Vec<Schema>,
+    }
+
+    impl Parse for SchemaList {
+        fn parse(input: ParseStream) -> Result<Self> {
+            let lookahead = input.lookahead1();
+
+            if lookahead.peek(Ident) {
+                Ok(SchemaList {
+                    items: vec![input.parse()?],
+                })
+            } else if lookahead.peek(token::Bracket) {
+                let list = input.parse::<List>()?;
+                Ok(list.into_schema_list())
+            } else {
+                Err(lookahead.error())
+            }
+        }
+    }
+
+    let i2 = input.clone();
+    let schema_list = parse_macro_input!(i2 as SchemaList);
 
     let mut builder = Builder::default();
-    builder.create_object_from_map(&input.name.to_string(), &input_json);
+
+    schema_list
+        .items
+        .iter()
+        .for_each(|s| builder.create_object_from_map(&s.name.to_string(), &s.json_obj));
 
     TokenStream::from(builder.expand())
 }
